@@ -6,14 +6,20 @@ import { createInMemoryProofStore } from "./api/proof-status.js";
 import { createIpfsService } from "./ipfs/service.js";
 import { createNotificationService } from "./notifications/service.js";
 import type { ProofEvent } from "./notifications/types.js";
+import { rateLimiter } from "./api/rate-limit.js";
+import { requestLogger } from "./api/request-logger.js";
+import { errorHandler } from "./api/error-handler.js";
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors());
-app.use(express.json());
+const corsOrigin = process.env.CORS_ORIGIN || "http://localhost:3000";
+app.use(cors({ origin: corsOrigin }));
+app.use(express.json({ limit: "1mb" }));
+app.use(rateLimiter);
+app.use(requestLogger);
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
@@ -71,6 +77,8 @@ app.use(
     },
   })
 );
+
+app.use(errorHandler);
 
 if (process.env.NODE_ENV !== "test") {
   app.listen(PORT, () => {

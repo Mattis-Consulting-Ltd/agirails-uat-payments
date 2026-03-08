@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
+import { AuthError } from "../errors.js";
 
 export function apiKeyAuth(req: Request, res: Response, next: NextFunction) {
   const apiKey = req.header("x-api-key");
@@ -10,7 +11,7 @@ export function apiKeyAuth(req: Request, res: Response, next: NextFunction) {
   }
 
   if (!apiKey || apiKey !== expectedKey) {
-    res.status(401).json({ error: "Unauthorized: invalid or missing API key" });
+    next(new AuthError("Unauthorized: invalid or missing API key"));
     return;
   }
 
