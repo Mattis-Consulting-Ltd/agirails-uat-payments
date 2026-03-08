@@ -1,0 +1,54 @@
+reviews:
+  auto_review: true
+  review_summary: true
+  nitpicks: false
+  path_filters:
+    - "!dist/**"
+    - "!.next/**"
+    - "!out/**"
+    - "!artifacts/**"
+    - "!cache/**"
+    - "!typechain-types/**"
+    - "!*.min.js"
+  max_comments: 30
+  languages:
+    include:
+      - javascript
+      - typescript
+      - solidity
+      - json
+      - yaml
+      - markdown
+  rules:
+    security: high
+    performance: medium
+    readability: medium
+    testing: require
+    typescript:
+      prefer_strict_types: true
+
+instructions:
+  general: |
+    - Prefer small, concrete suggestions with code diffs.
+    - Flag risky changes, breaking API surface, and missing tests.
+    - Follow project scripts in package.json for lint/test/build.
+    - Flag any secret or private key exposure in code or logs.
+  by_path:
+    - pattern: "packages/contracts/**/*.sol"
+      notes: |
+        Prioritise Checks-Effects-Interactions compliance, reentrancy safety,
+        AccessControl correctness, gas optimisation, and events for state changes.
+    - pattern: "packages/middleware/src/**"
+      notes: |
+        Prioritise input validation, error handling, retry logic, secret exposure,
+        and transaction nonce/gas management.
+    - pattern: "packages/frontend/src/**"
+      notes: |
+        Prioritise no client-side secrets, XSS prevention, error boundaries,
+        and loading states.
+    - pattern: "scripts/**"
+      notes: "Check portability and shell safety."
+
+labels:
+  apply:
+    - needs-tests
