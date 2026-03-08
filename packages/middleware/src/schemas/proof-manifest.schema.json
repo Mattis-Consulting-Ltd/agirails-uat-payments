@@ -1,0 +1,159 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://agirails.mattisconsulting.com/schemas/proof-manifest.json",
+  "title": "AGIRAILS Proof Manifest",
+  "description": "Schema for UAT proof manifests submitted to the AGIRAILS escrow contract",
+  "type": "object",
+  "required": [
+    "version",
+    "taskId",
+    "projectId",
+    "agentId",
+    "timestamp",
+    "artifacts",
+    "testResults",
+    "manifestHash"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Schema version for forwards compatibility"
+    },
+    "taskId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Unique identifier for the task being proved"
+    },
+    "projectId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Project this task belongs to"
+    },
+    "agentId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Identifier of the subcontractor agent submitting proof"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of manifest generation"
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "description": "List of deliverable artifacts with their hashes",
+      "items": {
+        "type": "object",
+        "required": ["name", "sha256", "size", "mimeType"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "File name or identifier of the artifact"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "description": "SHA-256 hash of the artifact content"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Size in bytes"
+          },
+          "mimeType": {
+            "type": "string",
+            "minLength": 1,
+            "description": "MIME type of the artifact"
+          }
+        }
+      }
+    },
+    "testResults": {
+      "type": "object",
+      "required": ["total", "passed", "failed", "outcome", "cases"],
+      "additionalProperties": false,
+      "properties": {
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "passed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "outcome": {
+          "type": "string",
+          "enum": ["pass", "fail"],
+          "description": "Overall UAT outcome"
+        },
+        "cases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "status", "duration"],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "status": {
+                "type": "string",
+                "enum": ["pass", "fail", "skip"]
+              },
+              "duration": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Duration in milliseconds"
+              },
+              "error": {
+                "type": "string",
+                "description": "Error message if status is fail"
+              }
+            }
+          }
+        }
+      }
+    },
+    "logs": {
+      "type": "array",
+      "description": "Captured log entries from the harness run",
+      "items": {
+        "type": "object",
+        "required": ["timestamp", "level", "message"],
+        "additionalProperties": false,
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "level": {
+            "type": "string",
+            "enum": ["info", "warn", "error"]
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "notes": {
+      "type": "string",
+      "description": "Optional manual notes from the agent"
+    },
+    "manifestHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA-256 hash of all other fields, proving integrity"
+    }
+  }
+}
