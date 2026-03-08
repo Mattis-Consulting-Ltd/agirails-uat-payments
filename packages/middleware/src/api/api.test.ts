@@ -2,6 +2,7 @@ import express from "express";
 import request from "supertest";
 import { createApiRouter } from "./router";
 import { createInMemoryProofStore } from "./proof-status";
+import { errorHandler } from "./error-handler";
 import type { IpfsService } from "../ipfs/service";
 import { computeManifestHash } from "../harness/hash";
 
@@ -59,6 +60,7 @@ function createTestApp(ipfsMock?: Partial<IpfsService>) {
   });
 
   app.use("/api", router);
+  app.use(errorHandler);
 
   return { app, ipfsService, proofStore };
 }

@@ -1,7 +1,8 @@
-import type { Request, Response } from "express";
+import type { Request, Response, NextFunction } from "express";
 import { validateManifest } from "../harness/validator.js";
 import { computeManifestHash } from "../harness/hash.js";
 import type { IpfsService } from "../ipfs/service.js";
+import { ValidationError, IpfsPinError } from "../errors.js";
 
 export interface SubmitProofDeps {
   ipfsService: IpfsService;
@@ -9,34 +10,33 @@ export interface SubmitProofDeps {
 }
 
 export function createSubmitProofHandler(deps: SubmitProofDeps) {
-  return async (req: Request, res: Response) => {
-    const manifest = req.body;
-
-    if (!manifest || typeof manifest !== "object") {
-      res.status(400).json({ error: "Request body must be a JSON object" });
-      return;
-    }
-
-    const validation = validateManifest(manifest);
-    if (!validation.valid) {
-      res.status(422).json({
-        error: "Manifest failed schema validation",
-        details: validation.errors,
-      });
-      return;
-    }
-
-    const expectedHash = computeManifestHash(manifest as Record<string, unknown>);
-    if (manifest.manifestHash !== expectedHash) {
-      res.status(422).json({
-        error: "Manifest hash mismatch: content has been tampered with or hash was computed incorrectly",
-        expected: expectedHash,
-        received: manifest.manifestHash,
-      });
-      return;
-    }
-
+  return async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const manifest = req.body;
+
+      if (!manifest || typeof manifest !== "object") {
+        throw new ValidationError("Request body must be a JSON object");
+      }
+
+      const validation = validateManifest(manifest);
+      if (!validation.valid) {
+        res.status(422).json({
+          error: "Manifest failed schema validation",
+          details: validation.errors,
+        });
+        return;
+      }
+
+      const expectedHash = computeManifestHash(manifest as Record<string, unknown>);
+      if (manifest.manifestHash !== expectedHash) {
+        res.status(422).json({
+          error: "Manifest hash mismatch: content has been tampered with or hash was computed incorrectly",
+          expected: expectedHash,
+          received: manifest.manifestHash,
+        });
+        return;
+      }
+
       const pinResult = await deps.ipfsService.pinManifest(manifest);
 
       if (deps.onProofPinned) {
@@ -51,11 +51,12 @@ export function createSubmitProofHandler(deps: SubmitProofDeps) {
         size: pinResult.size,
       });
     } catch (err) {
+      if (err instanceof ValidationError) {
+        next(err);
+        return;
+      }
       const message = err instanceof Error ? err.message : "Unknown error";
-      res.status(502).json({
-        error: "Failed to pin manifest to IPFS",
-        details: message,
-      });
+      next(new IpfsPinError(`Failed to pin manifest to IPFS: ${message}`));
     }
   };
 }

@@ -1,0 +1,111 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  wallet    String   @unique
+  role      Role     @default(AGENT)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  projects Project[]
+  tasks    Task[]
+
+  @@map("users")
+}
+
+enum Role {
+  ADMIN
+  REVIEWER
+  AGENT
+}
+
+model Project {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  ownerId     String   @map("owner_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  owner User   @relation(fields: [ownerId], references: [id])
+  tasks Task[]
+
+  @@map("projects")
+}
+
+model Task {
+  id          String     @id @default(uuid())
+  projectId   String     @map("project_id")
+  assigneeId  String?    @map("assignee_id")
+  title       String
+  description String?
+  status      TaskStatus @default(OPEN)
+  reward      Decimal?   @db.Decimal(18, 8)
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  project  Project @relation(fields: [projectId], references: [id])
+  assignee User?   @relation(fields: [assigneeId], references: [id])
+  proofs   Proof[]
+
+  @@map("tasks")
+}
+
+enum TaskStatus {
+  OPEN
+  IN_PROGRESS
+  SUBMITTED
+  ACCEPTED
+  REJECTED
+  PAID
+}
+
+model Proof {
+  id        String      @id @default(uuid())
+  taskId    String      @map("task_id")
+  cid       String
+  status    ProofStatus @default(PENDING)
+  metadata  Json?
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+
+  task                 Task                  @relation(fields: [taskId], references: [id])
+  contractTransactions ContractTransaction[]
+
+  @@map("proofs")
+}
+
+enum ProofStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+model ContractTransaction {
+  id        String   @id @default(uuid())
+  proofId   String   @map("proof_id")
+  txHash    String   @unique @map("tx_hash")
+  method    String
+  status    TxStatus @default(PENDING)
+  blockNum  Int?     @map("block_num")
+  gasUsed   Decimal? @map("gas_used") @db.Decimal(18, 0)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  proof Proof @relation(fields: [proofId], references: [id])
+
+  @@map("contract_transactions")
+}
+
+enum TxStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+}
