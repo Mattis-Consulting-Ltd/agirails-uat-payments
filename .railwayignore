@@ -1,0 +1,5 @@
+# ACTP deployment security (AIP-13)
+.actp/
+.env
+.env.*
+node_modules/

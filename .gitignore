@@ -32,3 +32,5 @@ coverage/
 
 # Hardhat
 cache/
+# ACTP local state (contains mock blockchain state)
+.actp/
