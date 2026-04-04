@@ -70,7 +70,7 @@ The V1 contract does NOT validate EAS attestations on-chain:
 - A malicious provider could submit a fake attestation UID
 
 **Mitigations in place:**
-- SDK method `releaseEscrowWithVerification()` performs client-side validation:
+- SDK method `client.standard.releaseEscrow()` performs client-side validation (when `requireAttestation: true` is set in client config):
   - Verifies attestation exists on EAS
   - Checks attestation is not revoked
   - Validates attestation references correct txId
@@ -147,7 +147,7 @@ Provider completes work
 | Acceptance criteria | Encoded in proof metadata / off-chain spec |
 | UAT pass/fail result | `resultHash` = Keccak256 of canonical UAT manifest JSON |
 | Proof manifest | `resultCID` = IPFS-pinned full UAT results |
-| Auto-release on pass | SDK: `releaseEscrowWithVerification()` called on UAT pass |
+| Auto-release on pass | SDK: `releaseEscrow()` called on UAT pass |
 
 ### Integration Flow (What We Build)
 
@@ -173,11 +173,12 @@ Provider completes work
 
 ## Required Changes to Existing Code
 
-1. **Hash algorithm:** Change SHA-256 to Keccak256 for manifest integrity hash. ethers provides `keccak256`.
+1. **Dual-hash approach (Atlas recommendation):** Keep SHA-256 for manifest integrity hash (`manifestHash`). Generate Keccak256 `resultHash` only when wrapping into AIP-4 DeliveryProof via `ProofGenerator.hashContent()`. Both hashes coexist.
 2. **Proof schema:** Keep current rich manifest as the IPFS payload. Generate AIP-4 DeliveryProof as a wrapper that references it via `resultCID`.
-3. **SDK integration:** Wire `DeliveryProofBuilder` after IPFS pinning step.
-4. **Release flow:** UAT pass -> IPFS pin -> DeliveryProofBuilder -> escrow release via `releaseEscrowWithVerification()`.
+3. **SDK integration:** Wire `DeliveryProofBuilder` after IPFS pinning step. Use SDK's built-in IPFSClient for on-chain proof flows (keep Pinata for off-chain pinning).
+4. **Release flow:** UAT pass -> IPFS pin (Pinata) -> `ProofGenerator.hashContent()` -> `DeliveryProofBuilder.build()` -> `client.standard.releaseEscrow()`.
 5. **Never call contract directly.** V1 does not validate EAS attestations on-chain. SDK handles client-side validation.
+6. **API tier:** Use `client.standard` (production apps needing lifecycle control). Not `client.basic` (prototypes) or `client.advanced` (power users).
 
 ---
 

@@ -40,3 +40,9 @@ export class RateLimitError extends AppError {
     super(message, 429, "RATE_LIMIT");
   }
 }
+
+export class EscrowError extends AppError {
+  constructor(message: string) {
+    super(message, 502, "ESCROW_ERROR");
+  }
+}

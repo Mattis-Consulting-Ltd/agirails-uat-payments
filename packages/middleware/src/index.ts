@@ -6,6 +6,7 @@ import { createInMemoryProofStore } from "./api/proof-status.js";
 import { createIpfsService } from "./ipfs/service.js";
 import { createNotificationService } from "./notifications/service.js";
 import type { ProofEvent } from "./notifications/types.js";
+import type { SdkConfig } from "./sdk/index.js";
 import { rateLimiter } from "./api/rate-limit.js";
 import { requestLogger } from "./api/request-logger.js";
 import { errorHandler } from "./api/error-handler.js";
@@ -37,6 +38,14 @@ const ipfsService = createIpfsService({
   retries: 3,
 });
 
+const sdkConfig: SdkConfig | undefined =
+  process.env.AGIRAILS_SDK_MODE
+    ? {
+        mode: process.env.AGIRAILS_SDK_MODE as "testnet" | "mainnet",
+        requireAttestation: process.env.AGIRAILS_REQUIRE_ATTESTATION !== "false",
+      }
+    : undefined;
+
 const notificationService = createNotificationService({
   slack: process.env.SLACK_WEBHOOK_URL
     ? { webhookUrl: process.env.SLACK_WEBHOOK_URL }
@@ -55,6 +64,7 @@ app.use(
   createApiRouter({
     ipfsService,
     proofStore,
+    sdkConfig,
     onProofPinned: (taskId, cid) => {
       proofStore.set(taskId, {
         taskId,
