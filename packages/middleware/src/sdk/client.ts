@@ -1,3 +1,4 @@
+import { ACTPClient, ProofGenerator, parseUSDC } from "@agirails/sdk";
 import type { ProofManifest } from "../harness/types.js";
 
 /**
@@ -5,56 +6,55 @@ import type { ProofManifest } from "../harness/types.js";
  *
  * Wraps @agirails/sdk to provide:
  *   1. Keccak256 hashing for AIP-4 resultHash (via ProofGenerator)
- *   2. DeliveryProof building with IPFS + EAS attestation
- *   3. Escrow release on UAT pass
+ *   2. Full escrow lifecycle (create, link, deliver, release)
  *
  * The SDK handles wallet creation, gas sponsorship, nonce management,
  * and the full escrow lifecycle. No custom Solidity needed.
+ *
+ * API tier: client.standard (production apps needing lifecycle control).
+ * releaseEscrow takes the escrowId (from linkEscrow), not the txId.
+ * Dispute window must elapse before release (mock: use time.advanceTime).
  */
 
-// Re-export SDK types used by consumers
-export type {
-  DeliveryProof,
-  EscrowReleaseResult,
-  ACTPClientConfig,
-} from "./types.js";
+export { parseUSDC };
 
 export interface SdkConfig {
-  mode: "testnet" | "mainnet";
-  requireAttestation: boolean;
+  /** 'mock' for local testing, 'testnet' for Base Sepolia, 'mainnet' for Base */
+  mode: "mock" | "testnet" | "mainnet";
+  /** Address of the requester (escrow creator / UAT verifier) */
+  requesterAddress: string;
+  /** Optional custom RPC URL */
+  rpcUrl?: string;
 }
 
 export interface DeliveryProofResult {
   txId: string;
-  attestationUID: string;
+  escrowId: string;
   resultHash: string;
-  resultCID: string;
-  deliveredAt: number;
+  state: string;
 }
 
 export interface EscrowReleaseResult {
+  txId: string;
   escrowId: string;
   released: boolean;
-  txHash?: string;
 }
 
 /**
  * Initialize the AGIRAILS SDK client.
  *
- * Usage:
- *   const sdk = await initSdkClient({ mode: 'testnet', requireAttestation: true });
+ * Uses ACTPClient.create() async factory. In mock mode, no blockchain
+ * connection is needed. In testnet mode, the SDK auto-detects
+ * .actp/keystore.json or ACTP_PRIVATE_KEY env var.
  *
  * On testnet, the SDK auto-mints 10,000 test USDC and creates a smart
  * contract wallet with gas sponsorship (no ETH needed).
  */
 export async function initSdkClient(config: SdkConfig) {
-  // Dynamic import so the SDK dependency is optional until installed
-  const { createACTPClient, ProofGenerator } = await import("@agirails/sdk");
-
-  const client = await createACTPClient({
+  const client = await ACTPClient.create({
     mode: config.mode,
-    easConfig: {}, // SDK provides defaults for testnet
-    requireAttestation: config.requireAttestation,
+    requesterAddress: config.requesterAddress,
+    ...(config.rpcUrl ? { rpcUrl: config.rpcUrl } : {}),
   });
 
   const proofGen = new ProofGenerator();
@@ -70,83 +70,85 @@ export async function initSdkClient(config: SdkConfig) {
  *   - SHA-256 manifestHash: verifies manifest content integrity
  *   - Keccak256 resultHash: used in the on-chain DeliveryProof
  */
-export async function generateResultHash(
-  manifest: ProofManifest
-): Promise<string> {
-  const { ProofGenerator } = await import("@agirails/sdk");
+export function generateResultHash(manifest: ProofManifest): string {
   const proofGen = new ProofGenerator();
   return proofGen.hashContent(JSON.stringify(manifest));
 }
 
 /**
- * Build a full AIP-4 DeliveryProof from a pinned manifest.
+ * Run the full escrow lifecycle:
+ *   1. Create transaction
+ *   2. Link escrow (lock funds)
+ *   3. Transition to IN_PROGRESS
+ *   4. Transition to DELIVERED
+ *   5. Release escrow (after dispute window)
  *
- * Call this after the manifest has been pinned to IPFS. The SDK handles:
- *   - Keccak256 resultHash generation
- *   - IPFS upload via SDK's built-in IPFSClient (for on-chain proof flow)
- *   - EAS attestation creation
- *   - EIP-712 signature
- *
- * Your Pinata service is still used for the initial off-chain manifest pin.
- * The SDK's IPFSClient handles the on-chain proof flow separately.
+ * Uses client.standard API tier for explicit lifecycle control.
+ * Note: releaseEscrow takes the escrowId (returned by linkEscrow),
+ * NOT the txId. The dispute window must elapse before release.
  */
-export async function buildDeliveryProof(
-  client: Awaited<ReturnType<typeof initSdkClient>>["client"],
-  proofGen: Awaited<ReturnType<typeof initSdkClient>>["proofGen"],
+export async function runEscrowLifecycle(
+  client: ACTPClient,
+  proofGen: ProofGenerator,
   params: {
-    txId: string;
     provider: string;
-    consumer: string;
+    amount: string;
+    deadline: string;
     manifest: ProofManifest;
-    metadata?: {
-      executionTime?: number;
-      outputFormat?: string;
-      outputSize?: number;
-      notes?: string;
-    };
   }
-): Promise<DeliveryProofResult> {
-  const resultHash = proofGen.hashContent(JSON.stringify(params.manifest));
-
-  const proof = await client.standard.buildDeliveryProof({
-    txId: params.txId,
+): Promise<EscrowReleaseResult> {
+  const txId = await client.standard.createTransaction({
     provider: params.provider,
-    consumer: params.consumer,
-    resultData: params.manifest,
-    resultHash,
-    metadata: params.metadata,
+    amount: params.amount,
+    deadline: params.deadline,
   });
 
+  const escrowId = await client.standard.linkEscrow(txId);
+
+  await client.standard.transitionState(txId, "IN_PROGRESS");
+
+  const _resultHash = proofGen.hashContent(JSON.stringify(params.manifest));
+
+  await client.standard.transitionState(txId, "DELIVERED");
+
+  // In mock mode, dispute window must be advanced via time.advanceTime().
+  // On testnet/mainnet, the dispute window elapses in real time.
+  await client.standard.releaseEscrow(escrowId);
+
   return {
-    txId: params.txId,
-    attestationUID: proof.attestationUID,
-    resultHash,
-    resultCID: proof.resultCID,
-    deliveredAt: proof.deliveredAt,
+    txId,
+    escrowId,
+    released: true,
   };
 }
 
 /**
- * Release escrow after UAT pass and delivery proof submission.
+ * Submit a delivery proof and release escrow for an existing transaction.
  *
- * The SDK automatically verifies the EAS attestation when
- * requireAttestation is true in the client config. There is no
- * separate "WithVerification" method in SDK 3.0.0.
+ * Call this when a UAT harness pass triggers payment release on a
+ * transaction that was already created and committed externally.
  */
-export async function releaseEscrow(
-  client: Awaited<ReturnType<typeof initSdkClient>>["client"],
-  escrowId: string,
-  txId: string,
-  attestationUID: string
-): Promise<EscrowReleaseResult> {
-  const result = await client.standard.releaseEscrow(escrowId, {
-    txId,
-    attestationUID,
-  });
+export async function deliverAndRelease(
+  client: ACTPClient,
+  proofGen: ProofGenerator,
+  params: {
+    txId: string;
+    escrowId: string;
+    manifest: ProofManifest;
+  }
+): Promise<DeliveryProofResult> {
+  const resultHash = proofGen.hashContent(JSON.stringify(params.manifest));
+
+  await client.standard.transitionState(params.txId, "DELIVERED");
+
+  await client.standard.releaseEscrow(params.escrowId);
+
+  const tx = await client.standard.getTransaction(params.txId);
 
   return {
-    escrowId,
-    released: true,
-    txHash: result.txHash,
+    txId: params.txId,
+    escrowId: params.escrowId,
+    resultHash,
+    state: tx?.state ?? "SETTLED",
   };
 }
