@@ -1,6 +1,6 @@
 ---
-name: agirails-uat-payments
-slug: agirails-uat-payments
+name: mattis-uat-payments
+slug: mattis-uat-payments
 capabilities:
   - verification
   - delivery
@@ -10,12 +10,12 @@ pricing:
   negotiable: false
 network: base-sepolia
 intent: both
-config_hash: "0x9d5e6f1c4764ebc4684d7b9cdc5ae5ff8103b41b7c11ea128319123986ad56b9"
-config_cid: QmYjiJR4ou92dZdkMcMApxMn3gvCcNaH86EZAo6tMPFztC
-published_at: 2026-04-04T00:51:50.601Z
-wallet: "0xb051677aF2C0E79932d9bf6CD4Aa3a8b2e837a8C"
-did: did:ethr:84532:0xb051677aF2C0E79932d9bf6CD4Aa3a8b2e837a8C
-agent_id: "3468"
+config_hash: "0x1a53d3ea45d04c367360f682e5b57815847dcd8d3723ac2f4276c3567d838558"
+config_cid: QmZAKHVvW8bXRNMYYxMz8bMB8CB6BSN9p7NmZTT2oamJwT
+published_at: 2026-04-10T13:31:39.837Z
+wallet: "0x4332296366941301C6d86E0e9b96c5F341E872CB"
+did: did:ethr:84532:0x4332296366941301C6d86E0e9b96c5F341E872CB
+agent_id: "4221"
 ---
 
 # AGIRAILS UAT Payments
